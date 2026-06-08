@@ -1,0 +1,2 @@
+"""Seoul crowd forecast application."""
+
