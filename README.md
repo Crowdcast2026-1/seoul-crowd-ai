@@ -90,3 +90,15 @@ GET /predictions?area=광화문·덕수궁&target_date=2026-06-15&target_time=18
 
 서울 실시간 API는 과거 데이터를 제공하지 않습니다. 모델 학습에 필요한 과거 데이터는 `/collect/all/continuous`를 주기적으로 호출해 직접 누적해야 합니다.
 
+
+121곳을 5분 동안 반복 수집하려면:
+
+  Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/collect/all/continuous"
+
+  수집 상태 확인:
+
+  Invoke-RestMethod -Uri "http://127.0.0.1:8000/collect/all/continuous/status"
+
+  121곳을 한 번만 수집하려면:
+
+  Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/collect/all"
