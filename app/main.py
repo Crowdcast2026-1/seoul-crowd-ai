@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, time
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query
 
 from app.areas import all_area_codes
 from app.collection_job import CollectionJobRunner
@@ -81,21 +81,19 @@ def collect_all() -> dict:
 
 @app.post("/collect/all/continuous")
 def collect_all_continuous(
-    background_tasks: BackgroundTasks,
-    duration_minutes: float = Query(5, gt=0, le=60),
+    interval_minutes: float = Query(5, gt=0, le=1440),
 ) -> dict:
     try:
         status = collection_jobs.start(
             settings,
             database,
-            duration_seconds=max(1, round(duration_minutes * 60)),
+            interval_seconds=max(1, round(interval_minutes * 60)),
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    background_tasks.add_task(collection_jobs.run, settings, database)
     return {
-        "message": "collection job started",
+        "message": "continuous collection job started",
         "status": status,
     }
 
@@ -103,6 +101,11 @@ def collect_all_continuous(
 @app.get("/collect/all/continuous/status")
 def collect_all_continuous_status() -> dict:
     return collection_jobs.status()
+
+
+@app.post("/collect/all/continuous/stop")
+def stop_collect_all_continuous() -> dict:
+    return collection_jobs.stop()
 
 
 @app.get("/observations")

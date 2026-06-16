@@ -56,16 +56,32 @@ POST /collect?area=POI009&area=POI014
 POST /collect/all
 ```
 
-서울 주요 121개 장소를 5분 동안 반복 수집:
+서울 주요 121개 장소를 5분마다 계속 반복 수집:
 
 ```text
 POST /collect/all/continuous
+```
+
+한 번 시작하면 `/collect/all/continuous/stop`을 호출하거나 서버 프로세스를 종료할 때까지 계속 실행됩니다. 수집 라운드 시작, 완료, 오류, 다음 실행 예정 시각은 uvicorn 콘솔 로그에 실시간으로 출력됩니다.
+
+간격 변경:
+
+```text
+POST /collect/all/continuous?interval_minutes=10
 ```
 
 수집 작업 상태 확인:
 
 ```text
 GET /collect/all/continuous/status
+```
+
+상태 응답의 `recent_events`에서도 최근 수집 로그를 확인할 수 있습니다.
+
+수집 작업 중지:
+
+```text
+POST /collect/all/continuous/stop
 ```
 
 저장된 데이터 조회:
@@ -88,17 +104,4 @@ GET /predictions?area=광화문·덕수궁&target_date=2026-06-15&target_time=18
 
 ## 참고
 
-서울 실시간 API는 과거 데이터를 제공하지 않습니다. 모델 학습에 필요한 과거 데이터는 `/collect/all/continuous`를 주기적으로 호출해 직접 누적해야 합니다.
-
-
-121곳을 5분 동안 반복 수집하려면:
-
-  Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/collect/all/continuous"
-
-  수집 상태 확인:
-
-  Invoke-RestMethod -Uri "http://127.0.0.1:8000/collect/all/continuous/status"
-
-  121곳을 한 번만 수집하려면:
-
-  Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/collect/all"
+서울 실시간 API는 과거 데이터를 제공하지 않습니다. 모델 학습에 필요한 과거 데이터는 `/collect/all/continuous`를 실행해 직접 누적해야 합니다. 이 작업은 `/collect/all/continuous/stop`을 호출하거나 서버 프로세스를 종료할 때까지 계속 반복됩니다.
