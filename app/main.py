@@ -125,7 +125,7 @@ def observations(
 def train(
     area: str | None = Query(None, description="특정 장소만 학습하려면 지정"),
     epochs: int = Query(80, ge=1, le=5000),
-    learning_rate: float = Query(0.01, gt=0, le=1),
+    learning_rate: float = Query(0.1, gt=0, le=1),
     seed: int = Query(42),
 ) -> dict:
     try:
