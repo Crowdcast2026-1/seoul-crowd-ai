@@ -42,6 +42,7 @@ def train_crowd_model(
     config: TrainingConfig | None = None,
 ) -> dict[str, Any]:
     cfg = config or TrainingConfig()
+    _validate_training_config(cfg)
     examples = _usable_observations(observations)
     if len(examples) < 3:
         raise ValueError("At least 3 labeled observations are required for train/validation/test split")
@@ -61,13 +62,27 @@ def train_crowd_model(
 
     input_dim = len(area_names) + 7
     model = CrowdNet(input_dim=input_dim).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=cfg.lr_scheduler_factor,
+        patience=cfg.lr_scheduler_patience,
+        min_lr=cfg.min_learning_rate,
+    )
 
     train_x, train_y = _tensor_dataset(train_rows, area_names, device=device)
     validation_x, validation_y = _tensor_dataset(validation_rows, area_names, device=device)
     test_x, test_y = _tensor_dataset(test_rows, area_names, device=device)
 
     history = []
+    best_state_dict = _state_dict_on_cpu(model)
+    best_epoch = 0
+    best_validation_loss = float("inf")
+    epochs_without_improvement = 0
+    epochs_ran = 0
+    stopped_reason = "max_epochs"
+
     for epoch in range(1, cfg.epochs + 1):
         model.train()
         optimizer.zero_grad()
@@ -76,15 +91,40 @@ def train_crowd_model(
         loss.backward()
         optimizer.step()
 
-        if epoch == 1 or epoch == cfg.epochs or epoch % max(1, cfg.epochs // 10) == 0:
+        epochs_ran = epoch
+        validation_metrics = evaluate_model(model, validation_x, validation_y)
+        scheduler.step(validation_metrics["loss"])
+
+        if validation_metrics["loss"] < best_validation_loss - cfg.early_stopping_min_delta:
+            best_validation_loss = validation_metrics["loss"]
+            best_epoch = epoch
+            best_state_dict = _state_dict_on_cpu(model)
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        if (
+            epoch == 1
+            or epoch == cfg.epochs
+            or epoch % max(1, cfg.epochs // 10) == 0
+            or epochs_without_improvement == 0
+        ):
             history.append(
                 {
                     "epoch": epoch,
+                    "learning_rate": _current_learning_rate(optimizer),
                     "train": evaluate_model(model, train_x, train_y),
-                    "validation": evaluate_model(model, validation_x, validation_y),
+                    "validation": validation_metrics,
+                    "best_epoch": best_epoch,
+                    "epochs_without_improvement": epochs_without_improvement,
                 }
             )
 
+        if epochs_without_improvement >= cfg.early_stopping_patience:
+            stopped_reason = "early_stopping"
+            break
+
+    model.load_state_dict(best_state_dict)
     train_metrics = evaluate_model(model, train_x, train_y)
     validation_metrics = evaluate_model(model, validation_x, validation_y)
     test_metrics = evaluate_model(model, test_x, test_y)
@@ -108,6 +148,15 @@ def train_crowd_model(
             "test": test_metrics,
         },
         "history": history,
+        "training_summary": {
+            "epochs_requested": cfg.epochs,
+            "epochs_ran": epochs_ran,
+            "best_epoch": best_epoch,
+            "early_stopped": stopped_reason == "early_stopping",
+            "stopped_reason": stopped_reason,
+            "best_validation_loss": best_validation_loss,
+            "final_learning_rate": _current_learning_rate(optimizer),
+        },
     }
     model_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(artifact, model_path)
@@ -121,6 +170,7 @@ def train_crowd_model(
         "split_counts": artifact["split_counts"],
         "metrics": artifact["metrics"],
         "history": history,
+        "training_summary": artifact["training_summary"],
     }
 
 
@@ -249,6 +299,25 @@ def _select_device() -> torch.device:
 
 def _state_dict_on_cpu(model: nn.Module) -> dict[str, torch.Tensor]:
     return {name: value.detach().cpu() for name, value in model.state_dict().items()}
+
+
+def _current_learning_rate(optimizer: torch.optim.Optimizer) -> float:
+    return round(float(optimizer.param_groups[0]["lr"]), 10)
+
+
+def _validate_training_config(config: TrainingConfig) -> None:
+    if config.weight_decay < 0:
+        raise ValueError("weight_decay must be greater than or equal to 0")
+    if config.early_stopping_patience < 1:
+        raise ValueError("early_stopping_patience must be at least 1")
+    if config.early_stopping_min_delta < 0:
+        raise ValueError("early_stopping_min_delta must be greater than or equal to 0")
+    if config.lr_scheduler_patience < 1:
+        raise ValueError("lr_scheduler_patience must be at least 1")
+    if not 0 < config.lr_scheduler_factor < 1:
+        raise ValueError("lr_scheduler_factor must be between 0 and 1")
+    if config.min_learning_rate <= 0:
+        raise ValueError("min_learning_rate must be greater than 0")
 
 
 def _usable_observations(observations: list[PopulationObservation]) -> list[PopulationObservation]:
