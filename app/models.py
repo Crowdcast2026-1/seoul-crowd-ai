@@ -31,8 +31,13 @@ class PopulationObservation:
 @dataclass(frozen=True)
 class TrainingConfig:
     epochs: int = 80
-    learning_rate: float = 0.01
+    learning_rate: float = 0.1
     train_ratio: float = 0.7
     validation_ratio: float = 0.15
     seed: int = 42
-
+    weight_decay: float = 0.0001
+    early_stopping_patience: int = 40
+    early_stopping_min_delta: float = 0.0001
+    lr_scheduler_patience: int = 15
+    lr_scheduler_factor: float = 0.5
+    min_learning_rate: float = 0.0001
