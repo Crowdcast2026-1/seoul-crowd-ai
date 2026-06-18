@@ -55,13 +55,17 @@ def train_crowd_model(
     )
 
     torch.manual_seed(cfg.seed)
+    device = _select_device()
+    if device.type == "cuda":
+        torch.cuda.manual_seed_all(cfg.seed)
+
     input_dim = len(area_names) + 7
-    model = CrowdNet(input_dim=input_dim)
+    model = CrowdNet(input_dim=input_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate)
 
-    train_x, train_y = _tensor_dataset(train_rows, area_names)
-    validation_x, validation_y = _tensor_dataset(validation_rows, area_names)
-    test_x, test_y = _tensor_dataset(test_rows, area_names)
+    train_x, train_y = _tensor_dataset(train_rows, area_names, device=device)
+    validation_x, validation_y = _tensor_dataset(validation_rows, area_names, device=device)
+    test_x, test_y = _tensor_dataset(test_rows, area_names, device=device)
 
     history = []
     for epoch in range(1, cfg.epochs + 1):
@@ -86,11 +90,12 @@ def train_crowd_model(
     test_metrics = evaluate_model(model, test_x, test_y)
 
     artifact = {
-        "state_dict": model.state_dict(),
+        "state_dict": _state_dict_on_cpu(model),
         "area_names": area_names,
         "input_dim": input_dim,
         "labels": CONGESTION_LABELS,
         "trained_at": datetime.now(tz=SEOUL_TZ).isoformat(),
+        "device": str(device),
         "config": asdict(cfg),
         "split_counts": {
             "train": len(train_rows),
@@ -110,6 +115,7 @@ def train_crowd_model(
     return {
         "model_path": str(model_path),
         "trained_at": artifact["trained_at"],
+        "device": artifact["device"],
         "labels": CONGESTION_LABELS,
         "area_names": area_names,
         "split_counts": artifact["split_counts"],
@@ -133,14 +139,19 @@ def predict_crowd(
     if target_dt <= datetime.now(tz=SEOUL_TZ):
         raise ValueError("target_date and target_time must be in the future in Asia/Seoul")
 
-    model = CrowdNet(input_dim=int(artifact["input_dim"]))
+    device = _select_device()
+    model = CrowdNet(input_dim=int(artifact["input_dim"])).to(device)
     model.load_state_dict(artifact["state_dict"])
     model.eval()
 
-    feature = torch.tensor([build_features(area_name, target_dt, area_names)], dtype=torch.float32)
+    feature = torch.tensor(
+        [build_features(area_name, target_dt, area_names)],
+        dtype=torch.float32,
+        device=device,
+    )
     with torch.no_grad():
         logits = model(feature)
-        probabilities = torch.softmax(logits, dim=1)[0]
+        probabilities = torch.softmax(logits, dim=1)[0].cpu()
         predicted_index = int(torch.argmax(probabilities).item())
 
     return {
@@ -153,6 +164,7 @@ def predict_crowd(
             for index, label in enumerate(CONGESTION_LABELS)
         },
         "model_trained_at": artifact["trained_at"],
+        "device": str(device),
         "metrics": artifact["metrics"],
     }
 
@@ -218,10 +230,25 @@ def build_features(area_name: str, observed_at: datetime, area_names: list[str])
     ]
 
 
-def _tensor_dataset(rows: list[PopulationObservation], area_names: list[str]) -> tuple[torch.Tensor, torch.Tensor]:
+def _tensor_dataset(
+    rows: list[PopulationObservation],
+    area_names: list[str],
+    device: torch.device | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
     features = [build_features(row.area_name, row.observed_at, area_names) for row in rows]
     labels = [LABEL_TO_INDEX[row.congestion_level] for row in rows if row.congestion_level in LABEL_TO_INDEX]
-    return torch.tensor(features, dtype=torch.float32), torch.tensor(labels, dtype=torch.long)
+    return (
+        torch.tensor(features, dtype=torch.float32, device=device),
+        torch.tensor(labels, dtype=torch.long, device=device),
+    )
+
+
+def _select_device() -> torch.device:
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def _state_dict_on_cpu(model: nn.Module) -> dict[str, torch.Tensor]:
+    return {name: value.detach().cpu() for name, value in model.state_dict().items()}
 
 
 def _usable_observations(observations: list[PopulationObservation]) -> list[PopulationObservation]:
@@ -230,4 +257,3 @@ def _usable_observations(observations: list[PopulationObservation]) -> list[Popu
         for item in observations
         if item.congestion_level in LABEL_TO_INDEX and item.observed_at is not None
     ]
-
