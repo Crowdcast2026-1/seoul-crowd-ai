@@ -28,6 +28,8 @@ class PyTorchModelTest(unittest.TestCase):
             self.assertIn("loss", result["metrics"]["train"])
             self.assertIn("accuracy", result["metrics"]["validation"])
             self.assertIn("accuracy", result["metrics"]["test"])
+            self.assertIn("training_summary", result)
+            self.assertLessEqual(result["training_summary"]["best_epoch"], result["training_summary"]["epochs_ran"])
 
             prediction = predict_crowd(
                 model_path=model_path,
