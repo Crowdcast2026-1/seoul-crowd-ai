@@ -40,7 +40,7 @@ POST /collect/all/continuous/stop
 학습은 저장된 SQLite 데이터를 읽어서 PyTorch 모델을 훈련합니다.
 
 ```text
-POST /train?epochs=100&learning_rate=0.01&train_ratio=0.7&validation_ratio=0.15
+POST /train?epochs=500&learning_rate=0.1
 ```
 
 예측은 장소명, 미래 날짜, 미래 시간을 입력받습니다.
@@ -49,13 +49,26 @@ POST /train?epochs=100&learning_rate=0.01&train_ratio=0.7&validation_ratio=0.15
 GET /predictions?area=광화문·덕수궁&target_date=2026-06-20&target_time=18:30
 ```
 
-기본 분할 비율은 다음과 같습니다.
+학습/검증/테스트 분할 비율은 API 입력으로 받지 않고 아래 값으로 고정합니다.
 
 ```text
 Train      70%
 Validation 15%
 Test       15%
 ```
+
+과적합을 줄이기 위해 학습은 마지막 epoch 모델을 그대로 저장하지 않습니다. 매 epoch validation loss를 확인하고, validation loss가 가장 낮았던 epoch의 모델을 최종 모델로 저장합니다.
+
+기본 학습 안정화 설정:
+
+- optimizer: AdamW
+- learning rate: 0.1
+- weight decay: 0.0001
+- early stopping patience: 40 epoch
+- LR scheduler: validation loss가 15 epoch 동안 개선되지 않으면 learning rate를 0.5배로 감소
+- minimum learning rate: 0.0001
+
+따라서 `epochs=500`으로 실행해도 후반부에 validation 성능이 나빠지면 best validation checkpoint가 저장되고, 개선이 오래 멈추면 early stopping으로 학습을 종료합니다.
 
 ## 혼잡도 분류를 직접 예측하는 이유
 
@@ -114,7 +127,7 @@ Linear(32 -> 4)
 여유, 보통, 약간 붐빔, 붐빔
 ```
 
-손실 함수는 cross entropy이고 optimizer는 Adam입니다.
+손실 함수는 cross entropy이고 optimizer는 AdamW입니다. Validation loss가 가장 낮았던 epoch의 모델을 저장하며, validation loss가 오래 개선되지 않으면 learning rate를 낮추고 early stopping을 적용합니다.
 
 ## 주요 API
 
@@ -216,7 +229,7 @@ PyTorch 모델 학습과 예측 로직입니다.
 프로젝트에서 공유하는 데이터 모델입니다.
 
 - `PopulationObservation`: 서울 API에서 받은 인구/혼잡도 관측값
-- `TrainingConfig`: epochs, learning rate, split ratio, seed 설정
+- `TrainingConfig`: epochs, learning rate, 고정 split ratio, seed 설정
 
 ### `app/seoul_api.py`
 
