@@ -126,8 +126,6 @@ def train(
     area: str | None = Query(None, description="특정 장소만 학습하려면 지정"),
     epochs: int = Query(80, ge=1, le=5000),
     learning_rate: float = Query(0.01, gt=0, le=1),
-    train_ratio: float = Query(0.7, gt=0, lt=1),
-    validation_ratio: float = Query(0.15, gt=0, lt=1),
     seed: int = Query(42),
 ) -> dict:
     try:
@@ -138,8 +136,6 @@ def train(
             config=TrainingConfig(
                 epochs=epochs,
                 learning_rate=learning_rate,
-                train_ratio=train_ratio,
-                validation_ratio=validation_ratio,
                 seed=seed,
             ),
         )
