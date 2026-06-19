@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from app.areas import all_area_codes, all_area_names
 from app.collection_job import CollectionJobRunner
-from app.main import area_names
+from app.main import app, area_names
 
 
 class CollectionJobTest(unittest.TestCase):
@@ -28,6 +28,7 @@ class CollectionJobTest(unittest.TestCase):
     def test_area_names_api_returns_names_only(self):
         names = area_names()
 
+        self.assertIn("/areas/names", {route.path for route in app.routes})
         self.assertEqual(names, all_area_names())
         self.assertFalse(any(name.startswith("POI") for name in names))
 
