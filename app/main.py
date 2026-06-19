@@ -4,7 +4,7 @@ from datetime import date, time
 
 from fastapi import FastAPI, HTTPException, Query
 
-from app.areas import all_area_codes
+from app.areas import all_area_codes, all_area_names
 from app.collection_job import CollectionJobRunner
 from app.config import DEFAULT_AREA, get_settings
 from app.database import PopulationDatabase, observation_to_dict
@@ -47,6 +47,11 @@ def areas() -> dict:
         "major_area_count": len(codes),
         "major_area_codes": codes,
     }
+
+
+@app.get("/areas/names")
+def area_names() -> list[str]:
+    return all_area_names()
 
 
 @app.get("/population/current")

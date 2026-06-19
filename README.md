@@ -134,6 +134,7 @@ Linear(32 -> 4)
 ```text
 GET  /health
 GET  /areas
+GET  /areas/names
 GET  /population/current?area=POI009
 POST /collect?area=POI009
 POST /collect/all
@@ -169,6 +170,7 @@ http://127.0.0.1:8000/docs
 
 - `SEOUL_MAJOR_AREA_CODES`: `POI001`부터 `POI121`까지의 코드
 - `all_area_codes()`: 전체 장소 코드 리스트 반환
+- `all_area_names()`: 코드 없이 장소명 리스트만 반환
 
 ### `app/collection_job.py`
 
