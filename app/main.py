@@ -10,7 +10,7 @@ from app.config import DEFAULT_AREA, get_settings
 from app.database import PopulationDatabase, observation_to_dict
 from app.models import TrainingConfig
 from app.seoul_api import SeoulApiError
-from app.workflows import collect_all_areas, collect_once, make_client, predict_model, train_model
+from app.workflows import collect_all_areas, collect_once, fetch_current_all_areas, make_client, predict_model, train_model
 
 
 settings = get_settings()
@@ -63,6 +63,11 @@ def current_population(area: str = Query(DEFAULT_AREA, description="장소명 �
     except OSError as exc:
         raise HTTPException(status_code=502, detail=f"Seoul API request failed: {exc}") from exc
     return observation_to_dict(observation)
+
+
+@app.get("/population/current/all")
+def current_population_all() -> dict:
+    return fetch_current_all_areas(settings, fallback_database=database)
 
 
 @app.post("/collect")
