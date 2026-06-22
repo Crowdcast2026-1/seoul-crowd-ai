@@ -43,6 +43,8 @@ class Settings:
     database_path: Path
     model_dir: Path
     seoul_api_timeout_seconds: float
+    seoul_api_max_workers: int
+    seoul_api_all_deadline_seconds: float
     model_path: Path
 
 
@@ -57,5 +59,7 @@ def get_settings() -> Settings:
         database_path=_project_path(os.getenv("DATABASE_PATH", "data/seoul_population.sqlite3")),
         model_dir=model_dir,
         seoul_api_timeout_seconds=float(os.getenv("SEOUL_API_TIMEOUT_SECONDS", "10")),
+        seoul_api_max_workers=int(os.getenv("SEOUL_API_MAX_WORKERS", "8")),
+        seoul_api_all_deadline_seconds=float(os.getenv("SEOUL_API_ALL_DEADLINE_SECONDS", "5")),
         model_path=_project_path(os.getenv("MODEL_PATH", str(model_dir / "crowd_model.pt"))),
     )
