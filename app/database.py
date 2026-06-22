@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS population_observations (
 
 CREATE INDEX IF NOT EXISTS idx_population_observations_area_time
 ON population_observations(area_name, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_population_observations_area_code_time
+ON population_observations(area_code, observed_at);
 """
 
 
@@ -95,6 +98,29 @@ class PopulationDatabase:
         with self.connect() as conn:
             rows = conn.execute(sql, params).fetchall()
         return [_row_to_observation(row) for row in rows]
+
+    def list_latest_observations_by_area_codes(self, area_codes: list[str]) -> dict[str, PopulationObservation]:
+        self.init()
+        if not area_codes:
+            return {}
+
+        placeholders = ", ".join("?" for _ in area_codes)
+        sql = f"""
+            SELECT *
+            FROM population_observations
+            WHERE area_code IN ({placeholders})
+            ORDER BY area_code ASC, observed_at DESC
+        """
+
+        latest: dict[str, PopulationObservation] = {}
+        with self.connect() as conn:
+            rows = conn.execute(sql, area_codes).fetchall()
+
+        for row in rows:
+            area_code = row["area_code"]
+            if area_code and area_code not in latest:
+                latest[area_code] = _row_to_observation(row)
+        return latest
 
     def count_observations(self, area_name: str | None = None) -> int:
         self.init()
